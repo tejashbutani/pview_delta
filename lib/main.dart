@@ -73,6 +73,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
                 },
                 creationParamsCodec: const StandardMessageCodec(),
                 onPlatformViewCreated: (int id) {
+                  print('Flutter: Platform view created with id: $id');
                   _channel = MethodChannel('custom_canvas_view_$id');
                   _channel?.setMethodCallHandler(_handleMethodCall);
                 },

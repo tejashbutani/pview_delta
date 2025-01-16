@@ -2,8 +2,6 @@ package com.example.pview_delta;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BlendMode;
-import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -20,7 +18,6 @@ import androidx.annotation.NonNull;
 
 import com.nomivision.sys.WhiteBoardSpeedup;
 import com.nomivision.sys.input.InputEventDispatchClient;
-import com.wriety.pview_delta.AcceleratedCanvasDelta;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -96,13 +93,13 @@ public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Cal
         clearCanvas();
     }
 
-    private void clearCanvas() {
+    void clearCanvas() {
         try {
             WhiteBoardSpeedup.AccelFbCanvas canvas = mWhiteBoardSpeedup.getAccelFbCurFrameCanvas();
             Paint clearPaint = new Paint();
-            clearPaint.setColor(Color.WHITE);
+            clearPaint.setColor(Color.TRANSPARENT);
             clearPaint.setStyle(Paint.Style.FILL);
-            canvas.drawColor(Color.WHITE);
+            canvas.drawColor(Color.TRANSPARENT);
 //            mWhiteBoardSpeedup.postCurFrameToDisp(true);
         } catch (Exception ex) {
             Log.e(TAG, "Failed to clear canvas: " + ex.toString());
@@ -179,6 +176,7 @@ public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Cal
     public void updatePenSettings(int color, float width) {
         mPaint.setColor(color);
         mPaint.setStrokeWidth(width);
+        Log.d(TAG, "Updated pen settings - Color: " + color + ", Width: " + width);
     }
 
     public void clear() {
@@ -199,12 +197,10 @@ public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Cal
     public void setDependencies(
         WhiteBoardSpeedup whiteBoardSpeedup,
         InputEventDispatchClient inputEventDispatchClient,
-        Paint paint,
-        AcceleratedCanvasDelta acceleratedCanvasDelta
+        Paint paint
     ) {
         this.mWhiteBoardSpeedup = whiteBoardSpeedup;
         this.mInEvtDispatchClient = inputEventDispatchClient;
         this.mPaint = paint;
-        // Store acceleratedCanvasDelta if needed
     }
 }

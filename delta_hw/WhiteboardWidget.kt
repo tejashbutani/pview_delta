@@ -1,4 +1,4 @@
-package com.wriety.pview_delta
+package com.wriety.delta_hw
 
 import android.graphics.Paint
 import android.graphics.Path
@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.MotionEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import com.nomivision.sys.WhiteBoardSpeedup
 import com.nomivision.sys.input.InputEventDispatchClient
 import kotlinx.coroutines.CoroutineScope
@@ -15,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-class AcceleratedCanvasDelta {
+class WhiteboardWidget {
     private val handler = Handler(Looper.getMainLooper())
     private val currentPaths = mutableMapOf<Int, Path>()
     private val pathPointsMap = mutableMapOf<Int, MutableList<Pair<Float, Float>>>()
@@ -23,7 +24,7 @@ class AcceleratedCanvasDelta {
     private val drawingScope = CoroutineScope(Dispatchers.Default + Job())
     
     companion object {
-        private const val TAG = "AcceleratedCanvasDelta"
+        private const val TAG = "WhiteboardWidget"
         private const val BATCH_SIZE = 5  // Number of points to process at once
     }
 
@@ -116,20 +117,21 @@ class AcceleratedCanvasDelta {
 }
 
 @Composable
-fun AcceleratedCanvasDelta(
-    acceleratedCanvasSpeedup: WhiteBoardSpeedup,
+fun WhiteboardScreen(
+    whiteBoardSpeedup: WhiteBoardSpeedup,
     inputEventDispatchClient: InputEventDispatchClient,
     paint: Paint,
-    acceleratedCanvasDelta: AcceleratedCanvasDelta
+    whiteboardWidget: WhiteboardWidget
 ) {
+    val context = LocalContext.current
     
     DisposableEffect(Unit) {
         onDispose {
             try {
-                acceleratedCanvasSpeedup.uninit()
+                whiteBoardSpeedup.uninit()
                 inputEventDispatchClient.uninit()
             } catch (ex: Exception) {
-                Log.e("AcceleratedCanvasDelta", "Failed to cleanup: ${ex.message}")
+                Log.e("WhiteboardScreen", "Failed to cleanup: ${ex.message}")
             }
         }
     }
