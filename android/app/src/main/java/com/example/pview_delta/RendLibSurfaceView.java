@@ -21,23 +21,25 @@ import com.nomivision.sys.input.InputEventDispatchClient;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.flutter.plugin.common.MethodChannel;
 
 public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Callback {
     private static final String TAG = "RendLibSurfaceView";
     private static final boolean ACCEL_FB_USE_LE_RGBA4444 = true;
-
+    private static final int BATCH_SIZE = 5;  // Number of points to process at once
+    
     private SurfaceHolder mHolder;
     private WhiteBoardSpeedup mWhiteBoardSpeedup;
     private InputEventDispatchClient mInEvtDispatchClient;
     private Paint mPaint;
-    private Path mPath;
-    private float mLastX = 0.0f;
-    private float mLastY = 0.0f;
-    private List<PointF> currentStrokePoints;
+    private Map<Integer, Path> mCurrentPaths;
+    private Map<Integer, List<PointF>> mPathPointsMap;
+    private Set<Integer> mActivePointers;
     private MethodChannel methodChannel;
 
     public RendLibSurfaceView(Context context) {
@@ -53,20 +55,22 @@ public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Cal
     private void init(Context context) {
         setLayerType(View.LAYER_TYPE_HARDWARE, null);
         
-        // Initialize WhiteBoardSpeedup
         mWhiteBoardSpeedup = new WhiteBoardSpeedup();
         initializeAccelFb();
         
-        // Initialize paint settings
         mPaint = new Paint();
         mPaint.setAntiAlias(true);
         mPaint.setColor(Color.RED);
         mPaint.setStrokeWidth(4.0f);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeCap(Paint.Cap.ROUND);
+        mPaint.setStrokeJoin(Paint.Join.ROUND);
+        mPaint.setDither(true);
         
-        mPath = new Path();
-        currentStrokePoints = new ArrayList<>();
+        mCurrentPaths = new HashMap<>();
+        mPathPointsMap = new HashMap<>();
+        mActivePointers = new HashSet<>();
+        
         getHolder().addCallback(this);
     }
 
@@ -108,69 +112,119 @@ public class RendLibSurfaceView extends SurfaceView implements SurfaceHolder.Cal
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        float x = event.getX();
-        float y = event.getY();
+        int pointerIndex = event.getActionIndex();
+        int pointerId = event.getPointerId(pointerIndex);
 
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                handleTouchDown(x, y);
+            case MotionEvent.ACTION_POINTER_DOWN:
+                handleTouchDown(pointerId, event.getX(pointerIndex), event.getY(pointerIndex));
                 break;
+
             case MotionEvent.ACTION_MOVE:
-                handleTouchMove(x, y);
+                for (int i = 0; i < event.getPointerCount(); i++) {
+                    int id = event.getPointerId(i);
+                    if (mActivePointers.contains(id)) {
+                        handleTouchMove(id, event.getX(i), event.getY(i));
+                    }
+                }
                 break;
+
             case MotionEvent.ACTION_UP:
-                handleTouchUp(x, y);
+            case MotionEvent.ACTION_POINTER_UP:
+                handleTouchUp(pointerId);
                 break;
         }
         return true;
     }
 
-    private void handleTouchDown(float x, float y) {
-        mLastX = x;
-        mLastY = y;
-        currentStrokePoints.clear();
-        currentStrokePoints.add(new PointF(x, y));
-        mPath.moveTo(x, y);
+    private void handleTouchDown(int pointerId, float x, float y) {
+        mActivePointers.add(pointerId);
+        Path path = new Path();
+        path.moveTo(x, y);
+        mCurrentPaths.put(pointerId, path);
+        
+        List<PointF> points = new ArrayList<>();
+        points.add(new PointF(x, y));
+        mPathPointsMap.put(pointerId, points);
     }
 
-    private void handleTouchMove(float x, float y) {
-        currentStrokePoints.add(new PointF(x, y));
-        mPath.quadTo(mLastX, mLastY, (x + mLastX) / 2, (y + mLastY) / 2);
+    private void handleTouchMove(int pointerId, float x, float y) {
+        List<PointF> points = mPathPointsMap.get(pointerId);
+        if (points == null) return;
+
+        points.add(new PointF(x, y));
         
-        try {
-            WhiteBoardSpeedup.AccelFbCanvas canvas = mWhiteBoardSpeedup.getAccelFbCurFrameCanvas();
-            canvas.drawLine(mLastX, mLastY, x, y, mPaint);
-//            mWhiteBoardSpeedup.postCurFrameToDisp(true);
-        } catch (Exception ex) {
-            Log.e(TAG, "Failed to draw line: " + ex.toString());
+        if (points.size() >= BATCH_SIZE) {
+            updatePath(pointerId);
+            drawCurrentPath(pointerId);
+            
+            // Keep only the last point for continuity
+            PointF lastPoint = points.get(points.size() - 1);
+            points.clear();
+            points.add(lastPoint);
         }
-        
-        mLastX = x;
-        mLastY = y;
     }
 
-    private void handleTouchUp(float x, float y) {
-        currentStrokePoints.add(new PointF(x, y));
+    private void handleTouchUp(int pointerId) {
+        updatePath(pointerId);
+        drawCurrentPath(pointerId);
         
         if (methodChannel != null) {
-            Map<String, Object> strokeData = new HashMap<>();
-            List<Map<String, Double>> points = new ArrayList<>();
-            
-            for (PointF point : currentStrokePoints) {
-                Map<String, Double> pointMap = new HashMap<>();
-                pointMap.put("x", (double) point.x);
-                pointMap.put("y", (double) point.y);
-                points.add(pointMap);
-            }
-            
-            strokeData.put("points", points);
-            strokeData.put("color", Color.RED);
-            strokeData.put("width", 4.0);
-            
-            methodChannel.invokeMethod("onStrokeComplete", strokeData);
+            sendStrokeData(pointerId);
         }
         
-        mPath.reset();
+        mActivePointers.remove(pointerId);
+        mCurrentPaths.remove(pointerId);
+        mPathPointsMap.remove(pointerId);
+    }
+
+    private void updatePath(int pointerId) {
+        List<PointF> points = mPathPointsMap.get(pointerId);
+        Path path = mCurrentPaths.get(pointerId);
+        if (points == null || path == null || points.isEmpty()) return;
+
+        path.reset();
+        PointF firstPoint = points.get(0);
+        path.moveTo(firstPoint.x, firstPoint.y);
+        
+        for (int i = 1; i < points.size(); i++) {
+            PointF point = points.get(i);
+            path.lineTo(point.x, point.y);
+        }
+    }
+
+    private void drawCurrentPath(int pointerId) {
+        try {
+            Path path = mCurrentPaths.get(pointerId);
+            if (path == null) return;
+            
+            WhiteBoardSpeedup.AccelFbCanvas canvas = mWhiteBoardSpeedup.getAccelFbCurFrameCanvas();
+            canvas.drawPath(path, mPaint);
+        } catch (Exception ex) {
+            Log.e(TAG, "Failed to draw path: " + ex.toString());
+        }
+    }
+
+    private void sendStrokeData(int pointerId) {
+        List<PointF> points = mPathPointsMap.get(pointerId);
+        if (points == null) return;
+
+        Map<String, Object> strokeData = new HashMap<>();
+        List<Map<String, Double>> pointsList = new ArrayList<>();
+        
+        for (PointF point : points) {
+            Map<String, Double> pointMap = new HashMap<>();
+            pointMap.put("x", (double) point.x);
+            pointMap.put("y", (double) point.y);
+            pointsList.add(pointMap);
+        }
+        
+        strokeData.put("points", pointsList);
+        strokeData.put("color", mPaint.getColor());
+        strokeData.put("width", mPaint.getStrokeWidth());
+        
+        methodChannel.invokeMethod("onStrokeComplete", strokeData);
     }
 
     public void updatePenSettings(int color, float width) {
