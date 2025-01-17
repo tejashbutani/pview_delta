@@ -53,7 +53,7 @@ class RendLibSurfaceViewWrapper(
                 }
             }
             "clear" -> {
-                rendLibSurfaceView.clear()
+//                rendLibSurfaceView.clear()
                 result.success(null)
             }
             else -> {

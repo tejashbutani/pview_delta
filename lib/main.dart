@@ -177,19 +177,19 @@ class _DrawingScreenState extends State<DrawingScreen> {
   }
 
   void _updatePenSettings() {
-    if (_channel != null) {
-      // print('Flutter: Updating pen settings - Color: ${currentColor.value}, Width: $currentWidth');
-      _channel!.invokeMethod('updatePenSettings', {
-        'color': currentColor.value,
-        'width': currentWidth,
-      }).then((_) {
-        // print('Flutter: Pen settings update completed');
-      }).catchError((error) {
-        print('Flutter: Error updating pen settings: $error');
-      });
-    } else {
-      print('Flutter: Channel is null, cannot update pen settings');
-    }
+    // if (_channel != null) {
+    //   // print('Flutter: Updating pen settings - Color: ${currentColor.value}, Width: $currentWidth');
+    //   _channel!.invokeMethod('updatePenSettings', {
+    //     'color': currentColor.value,
+    //     'width': currentWidth,
+    //   }).then((_) {
+    //     // print('Flutter: Pen settings update completed');
+    //   }).catchError((error) {
+    //     print('Flutter: Error updating pen settings: $error');
+    //   });
+    // } else {
+    //   print('Flutter: Channel is null, cannot update pen settings');
+    // }
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
@@ -202,7 +202,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
             strokes.add(Stroke(
               points: stroke.points,
               color: currentColor,
-              width: currentWidth,
+              width: currentWidth +1,
             ));
           });
           print('Received stroke with ${stroke.points.length} points'); // Debug log
